@@ -8,3 +8,9 @@ export const kafka = new Kafka({
   logLevel: logLevel.INFO,
   brokers: [process.env.MESSAGES_KAFKA],
 });
+
+export const admin = kafka.admin();
+
+(async () => {
+  // console.log(await admin.listTopics());
+})();

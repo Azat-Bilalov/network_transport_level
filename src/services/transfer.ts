@@ -1,6 +1,10 @@
 import Elysia from "elysia";
 import { MessageProducer, messageProducer } from "../repositories/kafka";
-import type { SegmentMessage } from "../types/messages";
+import type { SegmentMessageFromDatalink } from "../types/messages";
+
+if (!process.env.MESSAGES_KAFKA_TOPIC) {
+  throw new Error("MESSAGES_KAFKA_TOPIC is not defined");
+}
 
 export class TransferService {
   private readonly _messageProducer: MessageProducer;
@@ -9,8 +13,8 @@ export class TransferService {
     this._messageProducer = messageProducer;
   }
 
-  transfer(segmentMessage: SegmentMessage) {
-    const topic = `segment-${segmentMessage.time}`;
+  transfer(segmentMessage: SegmentMessageFromDatalink) {
+    const topic = process.env.MESSAGES_KAFKA_TOPIC || "draw-chat";
     const msg = JSON.stringify(segmentMessage);
 
     this._messageProducer.send(topic, msg);

@@ -3,12 +3,17 @@ import { kafka } from "./kafka";
 
 export class MessageConsumer<V> {
   readonly consumer: Consumer;
-  private readonly _callback: (msg: V) => void;
+  private readonly _callback: (msg: V, stage: number) => void;
   private readonly _delay: number;
   private readonly _topic: string;
   private _isRunning: boolean = false;
+  private _stage: number = 0;
 
-  constructor(topic: string, callback: (msg: V) => void, delay: number) {
+  constructor(
+    topic: string,
+    callback: (msg: V, stage: number) => void,
+    delay: number
+  ) {
     if (!topic) {
       throw new Error(`${topic} is not defined`);
     }
@@ -26,39 +31,41 @@ export class MessageConsumer<V> {
 
     await this.consumer.subscribe({
       topic: this._topic,
-      fromBeginning: true,
+      fromBeginning: false,
     });
 
     await this.consumer.run({
-      eachMessage: async ({ topic, partition, message }) => {
+      eachBatch: async ({ batch, pause }) => {
         console.log(
           "[consumer] Received message:",
-          topic,
-          partition,
-          message.value?.toString()
+          batch.topic,
+          batch.partition,
+          batch.messages.map((m) => m.value?.toString())
         );
 
-        if (!message.value) {
-          return;
-        }
+        batch.messages.forEach((message) => {
+          if (!message.value) {
+            return;
+          }
 
-        const msg = JSON.parse(message.value.toString()) as V;
+          const msg = JSON.parse(message.value.toString()) as V;
 
-        this._callback(msg);
+          this._callback(msg, this._stage);
+        });
+
+        this._stage += 1;
+
+        const resumeThisPartition = pause();
+
+        setTimeout(resumeThisPartition, this._delay);
       },
     });
-
-    await this.consumer.disconnect();
   }
 
   runWithDelay() {
     if (this._isRunning) {
       return;
     }
-
-    // setInterval(() => {
-    //   this._connectAndRun();
-    // }, this._delay);
 
     this._isRunning = true;
 

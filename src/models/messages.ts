@@ -13,9 +13,10 @@ export const messageToApplication = t.Object({
   payload: t.String(),
 });
 
-export const segmentMessage = t.Object({
+export const segmentMessageFromDatalink = t.Object({
   payload: t.String(),
   time: t.Integer(),
   total: t.Integer(),
   number: t.Integer(),
+  error: t.Boolean(),
 });

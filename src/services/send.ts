@@ -1,7 +1,10 @@
 import type { AxiosInstance } from "axios";
 import Elysia from "elysia";
 import { axiosInstance } from "../repositories/axios";
-import type { MessageFromApplication, SegmentMessage } from "../types/messages";
+import type {
+  MessageFromApplication,
+  SegmentMessageToDatalink,
+} from "../types/messages";
 
 const SEGMENT_HEADER_SIZE = 8 + 8 + 8;
 const SEGMENT_SIZE = 2300;
@@ -26,27 +29,31 @@ export class SenderService {
     }
   }
 
-  private async _send(data: SegmentMessage) {
-    return this._axiosInstance.post("/send", data);
+  private async _send(data: SegmentMessageToDatalink) {
+    // console.log("Отправка на канальный уровень:", data);
+    return this._axiosInstance.post("/code", data);
   }
 
-  private _split(message: MessageFromApplication): SegmentMessage[] {
-    const segments: SegmentMessage[] = [];
+  private _split(message: MessageFromApplication): SegmentMessageToDatalink[] {
+    const segments: SegmentMessageToDatalink[] = [];
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
 
     const encodedPayload = encoder.encode(message.payload);
-    const total = encodedPayload.length / SEGMENT_PAYLOAD_SIZE;
+    const total = Math.floor(encodedPayload.length / SEGMENT_PAYLOAD_SIZE) + 1;
 
     const currentEncodedPayload: number[] = [];
 
-    encodedPayload.forEach((byte, index) => {
+    const encodedSender = encoder.encode(message.sender);
+    currentEncodedPayload.push(...encodedSender, "\0".charCodeAt(0));
+
+    encodedPayload.forEach((byte) => {
       currentEncodedPayload.push(byte);
 
       if (currentEncodedPayload.length === SEGMENT_PAYLOAD_SIZE) {
         const uint8Array = new Uint8Array(currentEncodedPayload);
 
-        const segmentMessage: SegmentMessage = {
+        const segmentMessage: SegmentMessageToDatalink = {
           time: message.time,
           payload: decoder.decode(uint8Array),
           total,
@@ -58,6 +65,17 @@ export class SenderService {
         currentEncodedPayload.length = 0;
       }
     });
+
+    const uint8Array = new Uint8Array(currentEncodedPayload);
+
+    const segmentMessage: SegmentMessageToDatalink = {
+      time: message.time,
+      payload: decoder.decode(uint8Array),
+      total,
+      number: segments.length + 1,
+    };
+
+    segments.push(segmentMessage);
 
     return segments;
   }

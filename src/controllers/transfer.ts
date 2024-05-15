@@ -1,5 +1,5 @@
 import Elysia from "elysia";
-import { segmentMessage } from "../models/messages";
+import { segmentMessageFromDatalink } from "../models/messages";
 import { transferService } from "../services/transfer";
 
 export const transferController = new Elysia({ name: "transferController" })
@@ -8,9 +8,10 @@ export const transferController = new Elysia({ name: "transferController" })
     "/transfer",
     ({ body, transferService }) => {
       transferService.transfer(body);
+      console.log("запрос на трансфер");
       return body;
     },
     {
-      body: segmentMessage,
+      body: segmentMessageFromDatalink,
     }
   );
