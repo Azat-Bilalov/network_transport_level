@@ -5,6 +5,7 @@ import type {
   MessageFromApplication,
   SegmentMessageToDatalink,
 } from "../types/messages";
+import { messageToLogFormat } from "../utils/messageToLogFormat";
 
 const SEGMENT_HEADER_SIZE = 8 + 8 + 8;
 const SEGMENT_SIZE = 2300;
@@ -30,7 +31,10 @@ export class SenderService {
   }
 
   private async _send(data: SegmentMessageToDatalink) {
-    // console.log("Отправка на канальный уровень:", data);
+    console.log(
+      "[senderService] Sending to datalink level:",
+      messageToLogFormat(data)
+    );
     return this._axiosInstance.post("/code", data);
   }
 

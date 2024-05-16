@@ -1,9 +1,11 @@
 import type { Consumer } from "kafkajs";
 import { kafka } from "./kafka";
+import { messageToLogFormat } from "../../utils/messageToLogFormat";
 
-export class MessageConsumer<V> {
+export class MessageConsumer<V extends { payload: string | null }> {
   readonly consumer: Consumer;
-  private readonly _callback: (msg: V, stage: number) => void;
+  private readonly _onMessage: (msg: V, stage: number) => void;
+  private readonly _onStage: (stage: number) => void;
   private readonly _delay: number;
   private readonly _topic: string;
   private _isRunning: boolean = false;
@@ -11,7 +13,8 @@ export class MessageConsumer<V> {
 
   constructor(
     topic: string,
-    callback: (msg: V, stage: number) => void,
+    onMessage: (msg: V, stage: number) => void,
+    onStage: (stage: number) => void,
     delay: number
   ) {
     if (!topic) {
@@ -21,7 +24,8 @@ export class MessageConsumer<V> {
     const groupId = Date.now().toString();
 
     this.consumer = kafka.consumer({ groupId });
-    this._callback = callback;
+    this._onMessage = onMessage;
+    this._onStage = onStage;
     this._delay = delay;
     this._topic = topic;
   }
@@ -34,32 +38,38 @@ export class MessageConsumer<V> {
       fromBeginning: false,
     });
 
+    const messages: V[] = [];
+
     await this.consumer.run({
-      eachBatch: async ({ batch, pause }) => {
-        console.log(
-          "[consumer] Received message:",
-          batch.topic,
-          batch.partition,
-          batch.messages.map((m) => m.value?.toString())
-        );
+      eachMessage: async ({ message }) => {
+        if (!message.value) {
+          return;
+        }
 
-        batch.messages.forEach((message) => {
-          if (!message.value) {
-            return;
-          }
+        const msg = JSON.parse(message.value.toString()) as V;
 
-          const msg = JSON.parse(message.value.toString()) as V;
-
-          this._callback(msg, this._stage);
-        });
-
-        this._stage += 1;
-
-        const resumeThisPartition = pause();
-
-        setTimeout(resumeThisPartition, this._delay);
+        messages.push(msg);
       },
     });
+
+    setInterval(() => {
+      console.log("[consumer] Stage:", this._stage);
+
+      this._onStage(this._stage);
+
+      messages.map((message) => {
+        console.log(
+          "[consumer] Received message:",
+          messageToLogFormat(message)
+        );
+
+        this._onMessage(message, this._stage);
+      });
+
+      messages.length = 0;
+
+      this._stage += 1;
+    }, this._delay);
   }
 
   runWithDelay() {

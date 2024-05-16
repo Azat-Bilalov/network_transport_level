@@ -8,7 +8,6 @@ export const transferController = new Elysia({ name: "transferController" })
     "/transfer",
     ({ body, transferService }) => {
       transferService.transfer(body);
-      console.log("запрос на трансфер");
       return body;
     },
     {

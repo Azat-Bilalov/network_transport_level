@@ -10,6 +10,7 @@ import type {
 import { applicationAxiosInstance } from "./repositories/axios";
 import { swagger } from "@elysiajs/swagger";
 import type { SegmentsRecord } from "./types/messageRecord";
+import { messageToLogFormat } from "./utils/messageToLogFormat";
 
 dotenv.config();
 
@@ -34,42 +35,42 @@ const messageConsumer = new MessageConsumer(
     }
 
     segmentsRecord[msg.time].segments.push(msg);
+    segmentsRecord[msg.time].lastUpdateStage = stage;
 
+    if (segmentsRecord[msg.time].segments.length === msg.total) {
+      segmentsRecord[msg.time].segments.sort((a, b) => a.number - b.number);
+      const payloadWithSender = segmentsRecord[msg.time].segments.reduce(
+        (acc, message) => acc + message.payload,
+        ""
+      );
+
+      const [sender, payload] = payloadWithSender.includes(DELIMITER)
+        ? payloadWithSender.split(DELIMITER)
+        : [null, payloadWithSender];
+
+      const fullMessage: MessageToApplication = {
+        sender,
+        time: msg.time,
+        error: segmentsRecord[msg.time].segments.some((s) => s.error),
+        payload,
+      };
+
+      console.log("Full message", messageToLogFormat(fullMessage));
+
+      delete segmentsRecord[msg.time];
+
+      applicationAxiosInstance.post("/api/receive", fullMessage);
+    }
+  },
+  (stage: number) => {
     Object.entries(segmentsRecord).forEach(
       ([time, { segments, lastUpdateStage }]) => {
-        if (segments.length && segments.length === segments[0].total) {
-          segments.sort((a, b) => a.number - b.number);
-          const payloadWithSender = segments.reduce(
-            (acc, message) => acc + message.payload,
-            ""
-          );
-
-          delete segmentsRecord[time];
-
-          const [sender, payload] = payloadWithSender.includes(DELIMITER)
-            ? payloadWithSender.split(DELIMITER)
-            : [null, payloadWithSender];
-
-          const fullMessage: MessageToApplication = {
-            sender,
-            time: Number(time),
-            error: segments.some((s) => s.error),
-            payload,
-          };
-
-          console.log("Full message", fullMessage);
-
-          // applicationAxiosInstance.post("/api/receive", fullMessage);
-
-          return;
-        }
-
         if (stage - lastUpdateStage >= STAGE_DIFFERENCE_FOR_REMOVAL) {
           const total = segments[0]?.total ?? "(undefined)";
           console.log(
             `Out of ${total} segments,`,
             `${segments.length} received,`,
-            `cleaning segments with ${time}`
+            `cleaning segments with ${time} time`
           );
 
           delete segmentsRecord[time];
@@ -81,9 +82,9 @@ const messageConsumer = new MessageConsumer(
             payload: null,
           };
 
-          console.log("Error message", errorMessage);
+          console.log("Error message", messageToLogFormat(errorMessage));
 
-          // applicationAxiosInstance.post("/api/receive", errorMessage);
+          applicationAxiosInstance.post("/api/receive", errorMessage);
         }
       }
     );
@@ -97,4 +98,4 @@ new Elysia()
   .use(swagger())
   .use(sendController)
   .use(transferController)
-  .listen(3000);
+  .listen(3030);

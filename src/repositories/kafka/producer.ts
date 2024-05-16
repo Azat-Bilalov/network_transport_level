@@ -19,7 +19,10 @@ export class MessageProducer {
       messages: [{ value: message }],
     });
 
-    console.log(`[producer] Sent message: ${message} to topic: ${topic}`);
+    console.log(
+      `[producer] Topic: ${topic}, message:`,
+      message.slice(0, 10) + "..."
+    );
 
     await this.producer.disconnect();
   }
